@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 const NAV_LINKS = [
   { label: "Academy", href: "#academy" },
@@ -12,8 +13,35 @@ const NAV_LINKS = [
   { label: "ABI Admin", href: "/admin/abis" },
 ] as const;
 
+function subscribeToHash(onStoreChange: () => void) {
+  window.addEventListener("hashchange", onStoreChange);
+  return () => window.removeEventListener("hashchange", onStoreChange);
+}
+
+function getHashSnapshot() {
+  return window.location.hash;
+}
+
+function getServerHashSnapshot() {
+  return "";
+}
+
+function isActiveHref(href: string, pathname: string, hash: string) {
+  if (href.startsWith("#")) {
+    return pathname === "/" && hash === href;
+  }
+
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const pathname = usePathname();
+  const hash = useSyncExternalStore(
+    subscribeToHash,
+    getHashSnapshot,
+    getServerHashSnapshot,
+  );
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 px-4 pt-4 sm:px-6 sm:pt-5">
@@ -23,16 +51,25 @@ export default function Navbar() {
         </Link>
 
         <ul className="hidden items-center gap-6 md:flex lg:gap-8">
-          {NAV_LINKS.map(({ label, href }) => (
-            <li key={label}>
-              <Link
-                href={href}
-                className="text-sm font-medium text-white transition-colors hover:text-white/80"
-              >
-                {label}
-              </Link>
-            </li>
-          ))}
+          {NAV_LINKS.map(({ label, href }) => {
+            const active = isActiveHref(href, pathname, hash);
+
+            return (
+              <li key={label}>
+                <Link
+                  href={href}
+                  aria-current={active ? "page" : undefined}
+                  className={`relative text-sm font-medium transition-colors ${
+                    active
+                      ? "text-white after:absolute after:-bottom-1.5 after:left-0 after:h-0.5 after:w-full after:rounded-full after:bg-white"
+                      : "text-white/75 hover:text-white"
+                  }`}
+                >
+                  {label}
+                </Link>
+              </li>
+            );
+          })}
         </ul>
 
         <Link
@@ -83,18 +120,27 @@ export default function Navbar() {
 
       {mobileMenuOpen && (
         <div className="mx-auto mt-2 max-w-6xl rounded-2xl bg-primary px-6 pb-4 md:hidden">
-          <ul className="flex flex-col gap-4 py-4">
-            {NAV_LINKS.map(({ label, href }) => (
-              <li key={label}>
-                <Link
-                  href={href}
-                  className="text-sm font-medium text-white transition-colors hover:text-white/80"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  {label}
-                </Link>
-              </li>
-            ))}
+          <ul className="flex flex-col gap-2 py-4">
+            {NAV_LINKS.map(({ label, href }) => {
+              const active = isActiveHref(href, pathname, hash);
+
+              return (
+                <li key={label}>
+                  <Link
+                    href={href}
+                    aria-current={active ? "page" : undefined}
+                    className={`block rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
+                      active
+                        ? "bg-white/20 text-white"
+                        : "text-white/75 hover:bg-white/10 hover:text-white"
+                    }`}
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    {label}
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
           <Link
             href="#connect-wallet"
