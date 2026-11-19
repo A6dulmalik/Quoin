@@ -7,6 +7,7 @@ contract MultisigTreasury {
     event ConfirmTransaction(address indexed owner, uint indexed txIndex);
     event RevokeConfirmation(address indexed owner, uint indexed txIndex);
     event ExecuteTransaction(address indexed owner, uint indexed txIndex);
+    event TransactionExecuted(address indexed executor, uint indexed txIndex, address indexed to, uint value);
     event LimitsUpdated(uint dailyLimit, uint weeklyLimit, uint threshold);
     event SensitiveRequiredUpdated(uint sensitiveRequired);
     event TimelockUpdated(uint timelockDelay);
@@ -358,6 +359,7 @@ contract MultisigTreasury {
         require(txn.executed, "execution state corrupted");
 
         emit ExecuteTransaction(msg.sender, _txIndex);
+        emit TransactionExecuted(msg.sender, _txIndex, txn.to, txn.value);
 
         if (correlationId != bytes32(0)) {
             emit BatchTransactionExecuted(correlationId, _txIndex, position, txn.to, txn.value);

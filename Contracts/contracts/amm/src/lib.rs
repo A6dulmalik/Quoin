@@ -709,6 +709,75 @@ impl AmmContract {
         GovernanceManager::cancel_proposal(&env, proposal_id, admin)
             .map_err(|_| AmmError::Unauthorized)
     }
+
+    /// Quote the expected output of a swap without executing it.
+    pub fn quote_swap(
+        env: Env,
+        token_in: Address,
+        token_out: Address,
+        amount_in: i128,
+    ) -> Result<i128, AmmError> {
+        require_init(&env)?;
+
+        if amount_in <= 0 {
+            return Err(AmmError::InvalidAmount);
+        }
+
+        let (token_a, token_b, zero_for_one) = if token_in < token_out {
+            (token_in.clone(), token_out.clone(), true)
+        } else {
+            (token_out.clone(), token_in.clone(), false)
+        };
+
+        let pool_key = PoolKey { token_a, token_b };
+        let pool = require_pool(&env, &pool_key)?;
+        if pool.liquidity == 0 {
+            return Err(AmmError::InsufficientLiquidity);
+        }
+
+        let target_tick = if zero_for_one {
+            pool.current_tick - 1
+        } else {
+            pool.current_tick + 1
+        };
+        let target_tick = target_tick.max(pool::MIN_TICK).min(pool::MAX_TICK);
+        let target_sqrt = tick_to_sqrt_price(target_tick)?;
+
+        let step = compute_swap_step(
+            pool.sqrt_price,
+            target_sqrt,
+            pool.liquidity,
+            amount_in,
+            pool.dynamic_fee_bps,
+        );
+
+        Ok(step.amount_out)
+    }
+
+    /// Swap with a basis-point slippage tolerance instead of an absolute
+    /// minimum output. The tolerance is applied to the quoted output.
+    pub fn swap_with_slippage(
+        env: Env,
+        caller: Address,
+        token_in: Address,
+        token_out: Address,
+        amount_in: i128,
+        slippage_bps: u32,
+    ) -> Result<SwapResult, AmmError> {
+        if slippage_bps > 10_000 {
+            return Err(AmmError::InvalidAmount);
+        }
+
+        let quoted = Self::quote_swap(
+            env.clone(),
+            token_in.clone(),
+            token_out.clone(),
+            amount_in,
+        )?;
+        let min_amount_out = quoted * (10_000 - slippage_bps as i128) / 10_000;
+
+        Self::swap(env, caller, token_in, token_out, amount_in, min_amount_out)
+    }
 }
 
 #[cfg(test)]
