@@ -31,6 +31,7 @@ export default function FeatureStrip() {
             <Image
               src={icon}
               alt={label}
+              title={label}
               width={36}
               height={36}
               className="h-9 w-9"
