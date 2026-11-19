@@ -413,10 +413,9 @@ impl ParametricInsuranceContract {
             return Err(InsuranceError::PolicyNotActive);
         }
 
-        let now = env.ledger().timestamp();
-
-        // Auto-expire if the coverage window has elapsed
-        if now > policy.end_time {
+        // Auto-expire if the coverage window has elapsed before looking at the
+        // oracle, so a lapsed policy can never pay out.
+        if Self::is_policy_expired(env.clone(), policy_id)? {
             Self::do_expire_policy(&env, &mut policy);
             return Err(InsuranceError::PolicyExpired);
         }
@@ -500,6 +499,13 @@ impl ParametricInsuranceContract {
         );
 
         Ok(true)
+    }
+
+    /// Whether a policy's coverage window has elapsed.
+    pub fn is_policy_expired(env: Env, policy_id: u64) -> Result<bool, InsuranceError> {
+        let policy = InsuranceStorage::get_policy(&env, policy_id)
+            .ok_or(InsuranceError::PolicyNotFound)?;
+        Ok(env.ledger().timestamp() > policy.end_time)
     }
 
     /// Mark an expired policy as `Expired` and release its reserved coverage.
