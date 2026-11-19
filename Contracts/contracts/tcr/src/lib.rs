@@ -39,6 +39,16 @@ pub struct Challenge {
     pub resolved: bool,
 }
 
+/// Event emitted when a challenge (and its listing) is resolved
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ChallengeResolved {
+    pub listing_id: u32,
+    pub challenge_id: u32,
+    pub accepted: bool,
+    pub timestamp: u64,
+}
+
 #[contract]
 pub struct TCRContract;
 
@@ -226,6 +236,18 @@ impl TCRContract {
         env.events().publish(
             (extended_topics::TCR_RESOLVED,),
             TcrResolvedEvent {
+                listing_id,
+                challenge_id,
+                accepted,
+                timestamp: env.ledger().timestamp(),
+            },
+        );
+
+        // Challenge-specific resolution event, emitted alongside the listing
+        // resolution so challenge watchers do not have to filter by status.
+        env.events().publish(
+            (symbol_short!("chal_res"),),
+            ChallengeResolved {
                 listing_id,
                 challenge_id,
                 accepted,

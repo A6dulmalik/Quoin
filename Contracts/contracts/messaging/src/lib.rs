@@ -35,6 +35,14 @@ pub struct Message {
     pub nonce: u64,
 }
 
+/// A single attachment referenced by a message.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MessageAttachment {
+    pub message_id: u64,
+    pub uri: String,
+}
+
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MessageHashRecord {
@@ -1401,6 +1409,43 @@ impl UpgradeableMessagingContract {
 
         ReentrancyGuard::exit(&env);
         Ok(())
+    }
+
+    /// Send a message together with a single attachment URI.
+    ///
+    /// The message itself is stored by `send_message`; the attachment lives in
+    /// its own entry so existing message readers are unaffected.
+    pub fn send_message_with_attachment(
+        env: Env,
+        sender: Address,
+        recipient: Address,
+        payload: String,
+        attachment_uri: String,
+    ) -> Result<u64, MessagingError> {
+        let uri_len = attachment_uri.len();
+        if uri_len == 0 || uri_len > MAX_MESSAGE_LENGTH {
+            return Err(MessagingError::InvalidPayload);
+        }
+
+        let message_id = Self::send_message(env.clone(), sender, recipient, payload)?;
+
+        let attachment = MessageAttachment {
+            message_id,
+            uri: attachment_uri,
+        };
+        env.storage().persistent().set(
+            &(symbol_short!("attach"), message_id),
+            &attachment,
+        );
+
+        Ok(message_id)
+    }
+
+    /// Read the attachment stored for a message, if there is one.
+    pub fn get_attachment(env: Env, message_id: u64) -> Option<MessageAttachment> {
+        env.storage()
+            .persistent()
+            .get(&(symbol_short!("attach"), message_id))
     }
 }
 

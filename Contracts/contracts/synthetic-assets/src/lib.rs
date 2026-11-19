@@ -5,7 +5,9 @@ use shared::events::{
     CollateralAddedEvent, PriceUpdatedEvent,
 };
 use soroban_sdk::token::{Client as TokenClient, StellarAssetClient};
-use soroban_sdk::{contract, contracterror, contractimpl, contracttype, Address, Env, Symbol};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, Symbol,
+};
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -57,6 +59,16 @@ pub struct SyntheticConfig {
 mod keys {
     use soroban_sdk::{symbol_short, Symbol};
     pub const ADMIN: Symbol = symbol_short!("admin");
+}
+
+/// Event emitted when a synthetic position burns debt
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SyntheticBurned {
+    pub owner: Address,
+    pub asset_symbol: Symbol,
+    pub amount: i128,
+    pub timestamp: u64,
 }
 
 #[contract]
@@ -349,6 +361,16 @@ impl SyntheticAssetsContract {
         // PR #802: actually burn the user's synthetic tokens so the
         // ledger balance matches the debt reduction recorded above.
         TokenClient::new(&env, &config.synthetic_token).burn(&owner, &burn_amount);
+
+        env.events().publish(
+            (symbol_short!("syn_burn"),),
+            SyntheticBurned {
+                owner,
+                asset_symbol,
+                amount: burn_amount,
+                timestamp: env.ledger().timestamp(),
+            },
+        );
 
         Ok(())
     }
