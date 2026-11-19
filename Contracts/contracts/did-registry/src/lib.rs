@@ -235,7 +235,12 @@ impl DIDRegistryContract {
         caller.require_auth();
         let mut doc = Self::load_document(&env, &did).unwrap_or_else(|| panic!("DID not found"));
 
-        if !Self::is_authorized(&env, &caller, &doc) { panic!("Unauthorized"); }
+        // Owners control their own document; anyone else must hold the admin
+        // role. A plain PROPOSE permission is no longer enough to rewrite a
+        // DID the caller does not own.
+        if caller != doc.owner {
+            GovernanceManager::require_role(&env, &caller, GovernanceRole::Admin);
+        }
         if doc.deactivated { panic!("DID is deactivated"); }
 
         if let Some(vms) = verification_methods {
