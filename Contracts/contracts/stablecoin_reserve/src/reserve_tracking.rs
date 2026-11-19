@@ -5,6 +5,19 @@ const RESERVE_ASSETS: Symbol = symbol_short!("reserve_assets");
 const RESERVE_SNAPSHOTS: Symbol = symbol_short!("snapshots");
 const CURRENT_SNAPSHOT: Symbol = symbol_short!("current_snapshot");
 const TOTAL_SUPPLY: Symbol = symbol_short!("total_supply");
+const SUPPLY_CAP: Symbol = symbol_short!("supply_cap");
+
+/// Store the maximum supply the reserve will back. `u128::MAX` means no cap.
+pub fn set_supply_cap(env: Env, cap: u128) {
+    env.storage().instance().set(&SUPPLY_CAP, &cap);
+}
+
+pub fn get_supply_cap(env: Env) -> u128 {
+    env.storage()
+        .instance()
+        .get(&SUPPLY_CAP)
+        .unwrap_or(u128::MAX)
+}
 
 pub fn initialize(env: Env) {
     // Initialize empty reserve assets list
@@ -115,6 +128,11 @@ pub fn get_total_reserves(env: Env) -> Result<u128, ReserveError> {
 }
 
 pub fn update_total_supply(env: Env, new_supply: u128) -> Result<(), ReserveError> {
+    // Reject any supply increase beyond the configured cap.
+    if new_supply > get_supply_cap(env.clone()) {
+        return Err(ReserveError::SupplyCapExceeded);
+    }
+
     env.storage().instance().set(&TOTAL_SUPPLY, &new_supply);
     update_snapshot(env.clone())
 }

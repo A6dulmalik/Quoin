@@ -34,6 +34,7 @@ pub enum ReserveError {
     ProposalNotFound = 3012,
     ProposalNotActive = 3013,
     TimelockNotExpired = 3014,
+    SupplyCapExceeded = 3015,
 }
 
 #[contracttype]
@@ -194,6 +195,21 @@ impl StablecoinReserveContract {
             },
         );
         Ok(())
+    }
+
+    /// Set the maximum stablecoin supply the reserve will back.
+    pub fn set_supply_cap(env: Env, cap: u128) -> Result<(), ReserveError> {
+        if !shared::governance::has_role(env.clone(), env.invoker(), GovernanceRole::Admin) {
+            return Err(ReserveError::Unauthorized);
+        }
+
+        reserve_tracking::set_supply_cap(env.clone(), cap);
+        Ok(())
+    }
+
+    /// Read the configured supply cap.
+    pub fn get_supply_cap(env: Env) -> u128 {
+        reserve_tracking::get_supply_cap(env)
     }
 
     /// Generate daily proof of reserves

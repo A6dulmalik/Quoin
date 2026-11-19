@@ -46,11 +46,26 @@ contract RevocationRegistry is Ownable {
         uint256 expiry
     );
     event RevocationBatchCleared(address indexed tokenContract, uint256 count);
+    event RevokerUpdated(address indexed revoker, bool allowed);
+
+    /// @dev Addresses, other than the owner, allowed to change revocation status.
+    mapping(address => bool) public revokers;
+
+    modifier onlyRevoker() {
+        require(msg.sender == owner() || revokers[msg.sender], "not authorized to revoke");
+        _;
+    }
+
+    /// @dev Grant or revoke the right to write revocation records.
+    function setRevoker(address revoker, bool allowed) external onlyOwner {
+        revokers[revoker] = allowed;
+        emit RevokerUpdated(revoker, allowed);
+    }
 
     // ── Single operations ─────────────────────────────────────────────
 
     /// @dev Set revocation status for a single token (permanent revocation).
-    function setRevoked(address tokenContract, uint256 tokenId, bool isTokenRevoked) external onlyOwner {
+    function setRevoked(address tokenContract, uint256 tokenId, bool isTokenRevoked) external onlyRevoker {
         _setRevoked(tokenContract, tokenId, isTokenRevoked, 0, "");
     }
 
@@ -60,7 +75,7 @@ contract RevocationRegistry is Ownable {
         uint256 tokenId,
         bool isTokenRevoked,
         string memory reason
-    ) external onlyOwner {
+    ) external onlyRevoker {
         _setRevoked(tokenContract, tokenId, isTokenRevoked, 0, reason);
     }
 
@@ -71,7 +86,7 @@ contract RevocationRegistry is Ownable {
         uint256 tokenId,
         bool isTokenRevoked,
         uint256 expiry
-    ) external onlyOwner {
+    ) external onlyRevoker {
         _setRevoked(tokenContract, tokenId, isTokenRevoked, expiry, "");
     }
 
@@ -82,7 +97,7 @@ contract RevocationRegistry is Ownable {
         bool isTokenRevoked,
         uint256 expiry,
         string memory reason
-    ) external onlyOwner {
+    ) external onlyRevoker {
         _setRevoked(tokenContract, tokenId, isTokenRevoked, expiry, reason);
     }
 
