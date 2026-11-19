@@ -104,6 +104,35 @@ impl CrossChainRouter {
         NonceManager::set_chain_id(&env, chain_id);
     }
 
+    /// Register a destination chain the router is allowed to bridge to.
+    /// Until at least one chain is registered every candidate is accepted, so
+    /// existing single-chain deployments keep working.
+    pub fn add_supported_chain(env: Env, admin: Address, chain_id: u32) {
+        admin.require_auth();
+
+        let mut chains: Vec<u32> = env
+            .storage()
+            .persistent()
+            .get(&symbol_short!("chains"))
+            .unwrap_or(Vec::new(&env));
+        if !chains.iter().any(|registered| registered == chain_id) {
+            chains.push_back(chain_id);
+        }
+        env.storage()
+            .persistent()
+            .set(&symbol_short!("chains"), &chains);
+    }
+
+    /// Whether `chain_id` has been registered with the router.
+    pub fn is_chain_supported(env: Env, chain_id: u32) -> bool {
+        let chains: Vec<u32> = env
+            .storage()
+            .persistent()
+            .get(&symbol_short!("chains"))
+            .unwrap_or(Vec::new(&env));
+        chains.iter().any(|registered| registered == chain_id)
+    }
+
     pub fn initiate_message(
         env: Env,
         source_chain: u32,
@@ -114,6 +143,16 @@ impl CrossChainRouter {
     ) -> BytesN<32> {
         sender.require_auth();
         ReentrancyGuard::enter(&env);
+
+        // Reject unknown destination chains once an allowlist has been set up.
+        let chains: Vec<u32> = env
+            .storage()
+            .persistent()
+            .get(&symbol_short!("chains"))
+            .unwrap_or(Vec::new(&env));
+        if !chains.is_empty() && !chains.iter().any(|registered| registered == dest_chain) {
+            panic!("unsupported destination chain");
+        }
 
         NonceManager::enforce_sequential_nonce(&env, source_chain, env.ledger().sequence() as u64);
 
