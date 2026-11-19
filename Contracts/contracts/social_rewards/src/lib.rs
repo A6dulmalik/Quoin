@@ -26,6 +26,16 @@ pub struct EngagementRecorded {
     pub metadata: i128,
 }
 
+/// Event emitted when a user's reward is claimed
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct RewardClaimed {
+    pub engagement_id: u64,
+    pub user: Address,
+    pub reward_amount: i128,
+    pub timestamp: u64,
+}
+
 /// Event emitted when reward is distributed
 #[contracttype]
 #[derive(Clone, Debug)]
@@ -217,12 +227,23 @@ impl SocialRewardsContract {
         // Emit RewardDistributed event only after successful transfer
         let reward_event = RewardDistributed {
             engagement_id,
-            user: engagement.user,
+            user: engagement.user.clone(),
             reward_amount,
             timestamp: current_timestamp,
         };
         env.events()
             .publish((symbol_short!("rew_dist"),), reward_event);
+
+        // Emit the claim event so indexers can reconcile a user's claimed
+        // balance without having to reconstruct it from the distribution log.
+        let claimed_event = RewardClaimed {
+            engagement_id,
+            user: engagement.user,
+            reward_amount,
+            timestamp: current_timestamp,
+        };
+        env.events()
+            .publish((symbol_short!("rew_claim"),), claimed_event);
 
         Ok(())
     }
