@@ -91,6 +91,19 @@ contract SoulboundCredential is ERC721, Ownable {
         _revoke(tokenId, reason);
     }
 
+    /// @dev Issuer can revoke several credentials in one call. Tokens that are
+    ///      already revoked are skipped instead of reverting the whole batch.
+    function revokeBatch(uint256[] calldata tokenIds) external onlyOwner {
+        for (uint256 i = 0; i < tokenIds.length; ) {
+            uint256 tokenId = tokenIds[i];
+            require(_exists(tokenId), "SBT: token does not exist");
+            if (!revoked[tokenId]) {
+                _revoke(tokenId, "revoked by issuer");
+            }
+            unchecked { ++i; }
+        }
+    }
+
     /// @dev Issuer can renew by extending or resetting the expiration window.
     ///      Cannot renew a revoked credential – use `reissue` instead.
     function renew(uint256 tokenId, uint64 newExpiresAt) external onlyOwner onlyActive(tokenId) {

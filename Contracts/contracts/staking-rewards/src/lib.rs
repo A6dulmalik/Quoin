@@ -182,6 +182,12 @@ impl StakingRewardsContract {
             .get(&key)
             .ok_or(ContractError::NothingToClaim)?;
 
+        // A zero stake can never earn rewards; treat it as nothing to claim
+        // rather than paying out a zero-value transfer.
+        if user_stake.amount <= 0 {
+            return Err(ContractError::NothingToClaim);
+        }
+
         let reward_amount = calculate_rewards(&env, &user_stake)?;
         if reward_amount <= 0 {
             return Err(ContractError::NothingToClaim);
@@ -224,7 +230,9 @@ impl StakingRewardsContract {
             .get(&storage_keys::POOL_CONFIG)
             .unwrap();
 
-        let pool = pools.get_unchecked(user_stake.pool_id);
+        let pool = pools
+            .get(user_stake.pool_id)
+            .ok_or(ContractError::InvalidPool)?;
         let now = env.ledger().timestamp();
         let elapsed = now.saturating_sub(user_stake.start_timestamp);
 
