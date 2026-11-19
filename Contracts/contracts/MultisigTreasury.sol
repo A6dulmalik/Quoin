@@ -405,8 +405,11 @@ contract MultisigTreasury {
         }
 
         // Risky operations cannot execute before the timelock elapses. Unpause
-        // is sensitive but time-critical, so it is exempt.
-        if ((isSensitive && !isUnpauseCall) || txn.value > threshold) {
+        // is sensitive but time-critical, so it is exempt. An external call that
+        // carries calldata can do arbitrary things whatever value it sends (a
+        // token approval, say), so it is timelocked even below the threshold.
+        bool isExternalCall = txn.to != address(this) && txn.data.length > 0;
+        if ((isSensitive && !isUnpauseCall) || txn.value > threshold || isExternalCall) {
             require(block.timestamp >= txn.minExecuteTime, "timelock not elapsed");
         }
     }

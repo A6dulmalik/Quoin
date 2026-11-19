@@ -67,6 +67,18 @@ describe("MultisigTreasury", function () {
     expect(await treasury.weekSpent()).to.equal(value);
   });
 
+  it("timelocks a zero-value external call carrying calldata", async () => {
+    const data = "0x095ea7b3" + "00".repeat(64); // approve(address,uint256)
+    const idx = await submitTx(owner0, recipient.address, 0n, data);
+    await confirmBy(idx, owner0);
+    await expect(treasury.connect(owner0).executeTransaction(idx)).to.be.revertedWith(
+      "timelock not elapsed"
+    );
+    await advanceTime(TWO_DAYS);
+    await treasury.connect(owner0).executeTransaction(idx);
+    expect((await treasury.getTransaction(idx)).executed).to.equal(true);
+  });
+
   it("requires multisig and a timelock for large transactions above threshold", async () => {
     const value = ethers.parseEther("3"); // threshold is 2 ETH
     const idx = await submitTx(owner0, recipient.address, value);
