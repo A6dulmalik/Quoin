@@ -6,6 +6,7 @@ import Navbar from "../../components/Navbar";
 // Backend API URL (falls back to localhost during development)
 const API_BASE_URL =
 process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3000";
+const REGISTRIES_PER_PAGE = 10;
 
 // Default form values used when creating a new ABI registry entry
 const EMPTY_ABI = {
@@ -90,6 +91,16 @@ export default function AbiAdminPage() {
   const [form, setForm] = useState(EMPTY_ABI);
   const [status, setStatus] = useState("Loading ABI registry...");
   const [saving, setSaving] = useState(false);
+  const [registryPage, setRegistryPage] = useState(1);
+  const pageCount = Math.max(
+    1,
+    Math.ceil(registries.length / REGISTRIES_PER_PAGE),
+  );
+  const currentRegistryPage = Math.min(registryPage, pageCount);
+  const visibleRegistries = registries.slice(
+    (currentRegistryPage - 1) * REGISTRIES_PER_PAGE,
+    currentRegistryPage * REGISTRIES_PER_PAGE,
+  );
 
   function applyRegistry(registry: RegistrySummary) {
     setSelectedAddress(registry.contractAddress);
@@ -114,6 +125,7 @@ export default function AbiAdminPage() {
     try {
       const items = await fetchRegistries();
       setRegistries(items);
+      setRegistryPage(1);
       setStatus(registryStatus(items));
       return items;
     } catch {
@@ -132,6 +144,7 @@ export default function AbiAdminPage() {
     fetchRegistries(controller.signal)
       .then((items) => {
         setRegistries(items);
+        setRegistryPage(1);
         setStatus(registryStatus(items));
       })
       .catch(() => {
@@ -248,7 +261,7 @@ export default function AbiAdminPage() {
               Existing Registries
             </label>
             <div className="mt-3 space-y-3">
-              {registries.map((registry) => (
+              {visibleRegistries.map((registry) => (
                 <button
                   key={registry.contractAddress}
                   type="button"
@@ -269,6 +282,44 @@ export default function AbiAdminPage() {
                   </div>
                 </button>
               ))}
+              <nav
+                aria-label="ABI registry pagination"
+                className="flex items-center justify-between gap-3 pt-2 text-xs text-white/60"
+              >
+                <span>
+                  {registries.length === 0
+                    ? "0-0 of 0"
+                    : `${(currentRegistryPage - 1) * REGISTRIES_PER_PAGE + 1}-${Math.min(
+                        currentRegistryPage * REGISTRIES_PER_PAGE,
+                        registries.length,
+                      )} of ${registries.length}`}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setRegistryPage((page) => Math.max(1, page - 1))
+                    }
+                    disabled={currentRegistryPage === 1}
+                    className="rounded-full border border-white/10 px-3 py-1.5 transition hover:border-white/25 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Previous
+                  </button>
+                  <span>
+                    Page {currentRegistryPage} of {pageCount}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setRegistryPage((page) => Math.min(pageCount, page + 1))
+                    }
+                    disabled={currentRegistryPage === pageCount}
+                    className="rounded-full border border-white/10 px-3 py-1.5 transition hover:border-white/25 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Next
+                  </button>
+                </div>
+              </nav>
             </div>
           </aside>
         </div>
