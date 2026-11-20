@@ -91,6 +91,12 @@ export default function AbiAdminPage() {
   const [form, setForm] = useState(EMPTY_ABI);
   const [status, setStatus] = useState("Loading ABI registry...");
   const [saving, setSaving] = useState(false);
+
+  function resetForm() {
+    setForm({ ...EMPTY_ABI });
+    setSelectedAddress("");
+    setStatus("Form reset. Enter the ABI details to publish a new version.");
+  }
   const [registryPage, setRegistryPage] = useState(1);
   const pageCount = Math.max(
     1,
@@ -326,6 +332,10 @@ export default function AbiAdminPage() {
 
         <form
           onSubmit={handleSubmit}
+          onReset={(event) => {
+            event.preventDefault();
+            resetForm();
+          }}
           className="grid gap-6 rounded-[32px] border border-white/10 bg-white/5 p-6 shadow-[0_24px_80px_rgba(0,0,0,0.22)] lg:grid-cols-2"
         >
           <div className="space-y-5">
@@ -416,6 +426,13 @@ export default function AbiAdminPage() {
               className="rounded-full bg-cyan-300 px-6 py-3 text-sm font-semibold text-black transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {saving ? "Saving..." : "Publish ABI Version"}
+            </button>
+            <button
+              type="reset"
+              disabled={saving}
+              className="rounded-full border border-white/20 px-6 py-3 text-sm font-semibold text-white/80 transition hover:border-white/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Reset form
             </button>
           </div>
         </form>
