@@ -47,6 +47,7 @@ contract RevocationRegistry is Ownable {
     );
     event RevocationBatchCleared(address indexed tokenContract, uint256 count);
     event RevokerUpdated(address indexed revoker, bool allowed);
+    event Revoked(address indexed tokenContract, uint256 indexed tokenId, uint64 timestamp);
 
     /// @dev Addresses, other than the owner, allowed to change revocation status.
     mapping(address => bool) public revokers;
@@ -301,6 +302,7 @@ contract RevocationRegistry is Ownable {
             if (bytes(reason).length > 0) {
                 revocationReason[tokenContract][tokenId] = reason;
             }
+            emit Revoked(tokenContract, tokenId, uint64(block.timestamp));
             emit RevocationSetWithReason(
                 tokenContract, tokenId, true, expiry, block.timestamp, reason
             );
