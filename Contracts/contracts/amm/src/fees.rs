@@ -78,7 +78,7 @@ pub fn read_price_sample(env: &Env, pool_key: &PoolKey, period: u64) -> Option<i
     env.storage().persistent().get(&key)
 }
 
-// ─── Volatility computation ────────────────────────────────────────────────────
+// ─── Volatility computation ────────────────────────────────────────────────----
 
 /// Integer square-root via Newton's method (no_std safe).
 fn isqrt(n: i128) -> i128 {
@@ -130,29 +130,29 @@ pub fn compute_dynamic_fee(
     }
 
     let mean = sum / count as i128;
-    if mean == 0 {
+    if mean <= 0 {
         return (base_fee, count);
     }
 
-    // Compute variance
+    // Compute variance (using proper scaling and absolute differences)
     let mut variance_sum: i128 = 0;
     for i in 0..count as usize {
         let diff = samples[i] - mean;
         variance_sum += diff * diff;
     }
-    let variance = variance_sum / count as i128;
+    let variance = variance_sum / (count as i128);
 
     // Volatility in bps: sqrt(variance) * 10_000 / mean
-    let vol_bps = isqrt(variance) * 10_000 / mean.max(1);
+    let vol_bps = (isqrt(variance) * 10_000) / mean;
 
     // Premium: cap at MAX_FEE_PREMIUM_BPS
-    let premium = (vol_bps as u32 / VOLATILITY_DIVISOR).min(MAX_FEE_PREMIUM_BPS);
+    let premium = ((vol_bps as u32) / VOLATILITY_DIVISOR).min(MAX_FEE_PREMIUM_BPS);
 
-    let dynamic_fee = base_fee + premium;
+    let dynamic_fee = base_fee.saturating_add(premium);
     (dynamic_fee, count)
 }
 
-// ─── Fee growth accounting ─────────────────────────────────────────────────────
+// ─── Fee growth accounting ────────────────────────────────────────────────-----
 
 /// Increment the global fee-growth accumulator for a pool after a swap.
 ///
