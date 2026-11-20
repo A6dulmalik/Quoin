@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Navbar from "../components/Navbar";
+import { useRouter } from "next/navigation";
 import {
   API_BASE_URL,
   fetchCurrentUser,
@@ -13,6 +14,7 @@ import {
 } from "../lib/auth";
 
 export default function ProfilePage() {
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,6 +66,7 @@ export default function ProfilePage() {
     setUser(null);
     setError(null);
     setNewToken("");
+    router.replace("/");
   };
 
   return (
