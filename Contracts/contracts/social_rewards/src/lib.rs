@@ -54,6 +54,7 @@ pub enum RewardError {
     Unauthorized = 5003,
     InsufficientBalance = 5004,
     EngagementNotFound = 5005,
+    AlreadyClaimed = 5006,
 }
 
 impl From<RewardError> for soroban_sdk::Error {
@@ -206,6 +207,11 @@ impl SocialRewardsContract {
             .get(&engagement_key)
             .ok_or(RewardError::EngagementNotFound)?;
 
+        let claim_key = (symbol_short!("clmd"), engagement_id);
+        if env.storage().persistent().has(&claim_key) {
+            return Err(RewardError::AlreadyClaimed);
+        }
+
         // Load reward token
         let reward_token: Address = env
             .storage()
@@ -221,6 +227,8 @@ impl SocialRewardsContract {
 
         // Transfer tokens to the user before emitting event
         token_transfer(&env, &reward_token, &admin, &engagement.user, reward_amount);
+
+        env.storage().persistent().set(&claim_key, &true);
 
         let current_timestamp = env.ledger().timestamp();
 
