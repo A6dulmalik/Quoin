@@ -23,17 +23,13 @@ body {
 /* Center all modal dialogs on the screen */
 dialog,
 [role="dialog"],
-[role="alertdialog"] {
+[aria-modal="true"],
+.modal {
   position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  margin: 0;
-  max-height: calc(100vh - 2rem);
+  inset: 0;
+  margin: auto;
   max-width: calc(100vw - 2rem);
-  overflow: auto;
-}
-
-dialog:not([open]) {
-  display: none;
+  max-height: calc(100vh - 2rem);
+  height: fit-content;
+  width: fit-content;
 }
