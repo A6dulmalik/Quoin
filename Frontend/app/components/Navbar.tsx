@@ -1,6 +1,11 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import {
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type KeyboardEvent,
+} from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -38,12 +43,50 @@ function isActiveHref(href: string, pathname: string, hash: string) {
 
 export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLUListElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
   const pathname = usePathname();
   const hash = useSyncExternalStore(
     subscribeToHash,
     getHashSnapshot,
     getServerHashSnapshot,
   );
+
+  function closeMobileMenu() {
+    setMobileMenuOpen(false);
+    menuButtonRef.current?.focus();
+  }
+
+  function handleMenuKeyDown(event: KeyboardEvent<HTMLUListElement>) {
+    const items = Array.from(
+      menuRef.current?.querySelectorAll<HTMLAnchorElement>(
+        '[role="menuitem"]',
+      ) ?? [],
+    );
+    const currentIndex = items.indexOf(document.activeElement as HTMLAnchorElement);
+    if (!items.length) return;
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeMobileMenu();
+      return;
+    }
+
+    const nextIndex =
+      event.key === "ArrowDown"
+        ? (currentIndex + 1) % items.length
+        : event.key === "ArrowUp"
+          ? (currentIndex - 1 + items.length) % items.length
+          : event.key === "Home"
+            ? 0
+            : event.key === "End"
+              ? items.length - 1
+              : -1;
+    if (nextIndex >= 0) {
+      event.preventDefault();
+      items[nextIndex].focus();
+    }
+  }
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 px-4 pt-4 sm:px-6 sm:pt-5">
@@ -85,6 +128,8 @@ export default function Navbar() {
           type="button"
           className="inline-flex items-center justify-center rounded-md p-2 text-black hover:text-black/70 md:hidden"
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          ref={menuButtonRef}
+          aria-controls="mobile-navigation-menu"
           aria-expanded={mobileMenuOpen}
           aria-label="Toggle navigation menu"
         >
@@ -122,13 +167,20 @@ export default function Navbar() {
 
       {mobileMenuOpen && (
         <div className="mx-auto mt-2 max-w-6xl rounded-2xl bg-primary px-6 pb-4 md:hidden">
-          <ul className="flex flex-col gap-2 py-4">
+          <ul
+            id="mobile-navigation-menu"
+            ref={menuRef}
+            role="menu"
+            onKeyDown={handleMenuKeyDown}
+            className="flex flex-col gap-2 py-4"
+          >
             {NAV_LINKS.map(({ label, href }) => {
               const active = isActiveHref(href, pathname, hash);
 
               return (
                 <li key={label}>
                   <Link
+                    role="menuitem"
                     href={href}
                     aria-current={active ? "page" : undefined}
                     className={`block rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
@@ -136,7 +188,7 @@ export default function Navbar() {
                         ? "bg-white/20 text-white"
                         : "text-white/75 hover:bg-white/10 hover:text-white"
                     }`}
-                    onClick={() => setMobileMenuOpen(false)}
+                    onClick={closeMobileMenu}
                   >
                     {label}
                   </Link>
