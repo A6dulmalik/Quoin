@@ -22,6 +22,18 @@ body {
   color: var(--foreground);
 }
 
+/* Center all modal dialogs on the screen */
+dialog,
+[role="dialog"],
+[aria-modal="true"],
+.modal {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  max-width: calc(100vw - 2rem);
+  max-height: calc(100vh - 2rem);
+  height: fit-content;
+  width: fit-content;
 ::selection {
   background: rgb(59 59 240 / 45%);
   color: var(--foreground);
