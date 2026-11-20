@@ -264,7 +264,7 @@ impl AmmContract {
         if tick_lower >= tick_upper {
             return Err(AmmError::InvalidTickRange);
         }
-        if amount_desired_a <= 0 && amount_desired_b <= 0 {
+        if amount_desired_a <= 0 || amount_desired_b <= 0 {
             return Err(AmmError::InvalidAmount);
         }
 
