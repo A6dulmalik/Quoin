@@ -4,7 +4,6 @@ use soroban_sdk::{
     Address, Bytes, Env, Map, Symbol, Vec,
     contracterror,
 };
-use shared::acl::{ACL, PERMISSION_PROPOSE};
 use shared::governance::{GovernanceManager, GovernanceRole};
 use shared::events::{
     extended_topics,
@@ -361,8 +360,8 @@ impl DIDRegistryContract {
 
     // ── Internal helpers ──────────────────────────────────────────────────
 
-    fn is_authorized(env: &Env, caller: &Address, doc: &DIDDocument) -> bool {
-        caller == &doc.owner || ACL::has_permission(env, caller, &PERMISSION_PROPOSE)
+    fn is_authorized(_env: &Env, caller: &Address, doc: &DIDDocument) -> bool {
+        caller == &doc.owner
     }
 
     fn load_document(env: &Env, did: &Symbol) -> Option<DIDDocument> {
