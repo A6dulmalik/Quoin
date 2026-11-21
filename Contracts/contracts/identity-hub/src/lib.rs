@@ -1,10 +1,11 @@
 #![no_std]
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short,
-    Address, Bytes, Env, Map, Symbol, Vec,
+    Address, Bytes, BytesN, Env, Map, Symbol, Vec,
     contracterror,
 };
 use shared::governance::GovernanceManager;
+use shared::acl::{ACL, PERMISSION_PROPOSE};
 use shared::events::{
     extended_topics, HubCreatedEvent, DataEntryAddedEvent,
     PermissionGrantedEvent, PermissionRevokedEvent, SelectiveDisclosureCreatedEvent,
@@ -159,6 +160,22 @@ impl IdentityHubContract {
         GovernanceManager::init_governance_roles(&env, admin, approvers, executor);
         env.storage().persistent().set(&keys::HUB_CNT, &0u64);
 
+        Ok(())
+    }
+
+    /// Replace this contract's WASM. Only an authenticated governance admin
+    /// can authorize an upgrade.
+    pub fn upgrade(
+        env: Env,
+        caller: Address,
+        new_wasm_hash: BytesN<32>,
+    ) -> Result<(), IdentityHubError> {
+        caller.require_auth();
+        if !ACL::has_permission(&env, &caller, &PERMISSION_PROPOSE) {
+            return Err(IdentityHubError::Unauthorized);
+        }
+
+        env.deployer().update_current_contract_wasm(new_wasm_hash);
         Ok(())
     }
 
@@ -451,5 +468,28 @@ impl IdentityHubContract {
         let start = buf[plen..].iter().position(|&b| b != b'0')
             .map(|p| p + plen).unwrap_or(plen);
         Symbol::new(env, core::str::from_utf8(&buf[start..]).unwrap_or("x0"))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use soroban_sdk::testutils::Address as _;
+
+    #[test]
+    fn upgrade_rejects_non_admin() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let contract_id = env.register_contract(None, IdentityHubContract);
+        let client = IdentityHubContractClient::new(&env, &contract_id);
+        let admin = Address::generate(&env);
+        let caller = Address::generate(&env);
+        let executor = Address::generate(&env);
+
+        client.initialize(&admin, &Vec::new(&env), &executor);
+
+        let result = client.try_upgrade(&caller, &BytesN::from_array(&env, &[0; 32]));
+        assert_eq!(result, Err(Ok(IdentityHubError::Unauthorized)));
     }
 }
