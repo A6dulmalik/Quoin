@@ -7,7 +7,7 @@ use soroban_sdk::{
     token::StellarAssetClient,
     vec, Address, Env,
 };
-use crate::{AmmContract, AmmContractClient};
+use crate::{AmmContract, AmmContractClient, fees::record_price_sample, PoolKey};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -257,6 +257,25 @@ fn test_update_dynamic_fee_no_history_stays_base() {
     let (client, admin, _, _) = setup(&env);
     let (ta, tb) = make_pool(&env, &client, &admin);
     assert_eq!(client.update_dynamic_fee(&ta, &tb), 30);
+}
+
+#[test]
+fn test_update_dynamic_fee_with_volatility() {
+    let env = Env::default();
+    env.ledger().with_mut(|l| l.timestamp = 36_000);
+    let (client, admin, _, _) = setup(&env);
+    let (ta, tb) = make_pool(&env, &client, &admin);
+    let pool_key = PoolKey { token_a: ta.clone(), token_b: tb.clone(), fee_tier: 30 };
+    
+    // Record fluctuating prices across periods to induce variance
+    record_price_sample(&env, &pool_key, 1_000_000);
+    record_price_sample(&env, &pool_key, 1_200_000);
+    record_price_sample(&env, &pool_key, 900_000);
+    record_price_sample(&env, &pool_key, 1_300_000);
+
+    let dynamic_fee = client.update_dynamic_fee(&ta, &tb);
+    assert!(dynamic_fee >= 30);
+    assert!(dynamic_fee <= 30 + 50);
 }
 
 #[test]
