@@ -6,6 +6,7 @@ import {
   useSyncExternalStore,
   type KeyboardEvent,
 } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -19,6 +20,25 @@ const NAV_LINKS = [
   { label: "Profile", href: "/profile" },
   { label: "ABI Admin", href: "/admin/abis" },
 ] as const;
+
+const NOTIFICATION_STORAGE_KEY = "quoin:notifications";
+
+function getUnreadNotificationCount(): number {
+  try {
+    const raw = window.localStorage.getItem(NOTIFICATION_STORAGE_KEY);
+    const notifications: unknown = raw ? JSON.parse(raw) : [];
+    return Array.isArray(notifications)
+      ? notifications.filter(
+          (notification) =>
+            notification !== null &&
+            typeof notification === "object" &&
+            !(notification as { read?: unknown }).read,
+        ).length
+      : 0;
+  } catch {
+    return 0;
+  }
+}
 
 function subscribeToHash(onStoreChange: () => void) {
   window.addEventListener("hashchange", onStoreChange);
@@ -45,6 +65,7 @@ export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const menuRef = useRef<HTMLUListElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const pathname = usePathname();
   const hash = useSyncExternalStore(
     subscribeToHash,
@@ -87,6 +108,16 @@ export default function Navbar() {
       items[nextIndex].focus();
     }
   }
+  useEffect(() => {
+    const refreshCount = () => setUnreadNotificationCount(getUnreadNotificationCount());
+    refreshCount();
+    window.addEventListener("storage", refreshCount);
+    window.addEventListener("quoin:notifications-updated", refreshCount);
+    return () => {
+      window.removeEventListener("storage", refreshCount);
+      window.removeEventListener("quoin:notifications-updated", refreshCount);
+    };
+  }, []);
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 px-4 pt-4 sm:px-6 sm:pt-5">
@@ -117,12 +148,26 @@ export default function Navbar() {
           })}
         </ul>
 
-        <Link
-          href="#connect-wallet"
-          className="hidden rounded-full border border-white/20 bg-[#333] px-5 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 md:inline-block"
-        >
-          Connect Wallet
-        </Link>
+        <div className="hidden items-center gap-3 md:flex">
+          <Link
+            href="#notifications"
+            aria-label={`${unreadNotificationCount} unread notifications`}
+            className="relative rounded-full p-2 text-white/80 hover:text-white"
+          >
+            <span aria-hidden="true">🔔</span>
+            {unreadNotificationCount > 0 && (
+              <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-red-500 px-1 text-center text-[10px] font-bold leading-5 text-white">
+                {unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}
+              </span>
+            )}
+          </Link>
+          <Link
+            href="#connect-wallet"
+            className="rounded-full border border-white/20 bg-[#333] px-5 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
+          >
+            Connect Wallet
+          </Link>
+        </div>
 
         <button
           type="button"

@@ -45,6 +45,11 @@ pub struct ParameterProposal {
 
 const TIMELOCK_DELAY: u64 = 86400; // 24 hours in seconds
 
+// Governance storage keys (persistent)
+const PROPOSAL_COUNT_KEY: Symbol = symbol_short!("pcnt");
+const PROPOSALS_KEY: Symbol = symbol_short!("pprop");
+const GOV_VALUES_KEY: Symbol = symbol_short!("gov_vals");
+
 // Storage keys
 #[contracttype]
 #[derive(Clone)]
@@ -117,6 +122,15 @@ impl AcademyRewardsContract {
         env.storage()
             .persistent()
             .set(&symbol_short!("roles"), &roles);
+
+        // Initialize governance storage so all contract-level state exists from deployment
+        env.storage().persistent().set(&PROPOSAL_COUNT_KEY, &0u64);
+        env.storage()
+            .persistent()
+            .set(&PROPOSALS_KEY, &Map::<u64, ParameterProposal>::new(&env));
+        env.storage()
+            .persistent()
+            .set(&GOV_VALUES_KEY, &Map::<Symbol, u128>::new(&env));
 
         // Initialize circuit breaker
         CircuitBreaker::init(&env, cb_config);
@@ -300,7 +314,7 @@ impl AcademyRewardsContract {
     ) -> Result<u64, ContractError> {
         Self::require_admin(&env, &admin)?;
 
-        let params_map_key = symbol_short!("gov_vals");
+        let params_map_key = GOV_VALUES_KEY;
         let params_map: Map<Symbol, u128> = env
             .storage()
             .persistent()
@@ -312,7 +326,7 @@ impl AcademyRewardsContract {
         let proposal_id = env
             .storage()
             .persistent()
-            .get::<Symbol, u64>(&symbol_short!("pcnt"))
+            .get::<Symbol, u64>(&PROPOSAL_COUNT_KEY)
             .unwrap_or(0)
             + 1;
 
@@ -328,7 +342,7 @@ impl AcademyRewardsContract {
             cancelled: false,
         };
 
-        let proposals_key = symbol_short!("pprop");
+        let proposals_key = PROPOSALS_KEY;
         let mut proposals: Map<u64, ParameterProposal> = env
             .storage()
             .persistent()
@@ -339,7 +353,7 @@ impl AcademyRewardsContract {
         env.storage().persistent().set(&proposals_key, &proposals);
         env.storage()
             .persistent()
-            .set(&symbol_short!("pcnt"), &proposal_id);
+            .set(&PROPOSAL_COUNT_KEY, &proposal_id);
 
         env.events().publish(
             (symbol_short!("pprop"), proposal_id),
@@ -357,7 +371,7 @@ impl AcademyRewardsContract {
     ) -> Result<(), ContractError> {
         Self::require_admin(&env, &admin)?;
 
-        let proposals_key = symbol_short!("pprop");
+        let proposals_key = PROPOSALS_KEY;
         let mut proposals: Map<u64, ParameterProposal> = env
             .storage()
             .persistent()
@@ -376,7 +390,7 @@ impl AcademyRewardsContract {
             return Err(ContractError::TimelockNotExpired);
         }
 
-        let params_map_key = symbol_short!("gov_vals");
+        let params_map_key = GOV_VALUES_KEY;
         let mut params_map: Map<Symbol, u128> = env
             .storage()
             .persistent()
@@ -406,7 +420,7 @@ impl AcademyRewardsContract {
     ) -> Result<(), ContractError> {
         Self::require_admin(&env, &admin)?;
 
-        let proposals_key = symbol_short!("pprop");
+        let proposals_key = PROPOSALS_KEY;
         let mut proposals: Map<u64, ParameterProposal> = env
             .storage()
             .persistent()
@@ -438,7 +452,7 @@ impl AcademyRewardsContract {
         env: Env,
         proposal_id: u64,
     ) -> Result<ParameterProposal, ContractError> {
-        let proposals_key = symbol_short!("pprop");
+        let proposals_key = PROPOSALS_KEY;
         let proposals: Map<u64, ParameterProposal> = env
             .storage()
             .persistent()

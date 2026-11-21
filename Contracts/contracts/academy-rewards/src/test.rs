@@ -1,8 +1,14 @@
 #[cfg(test)]
 mod test {
-    use crate::{AcademyRewardsContract, AcademyRewardsContractClient, ContractError};
+    use crate::{
+        AcademyRewardsContract, AcademyRewardsContractClient, ContractError, ParameterProposal,
+    };
     use shared::circuit_breaker::CircuitBreakerConfig;
-    use soroban_sdk::{testutils::{Address as _, Ledger}, symbol_short, Address, Env, String};
+    use soroban_sdk::{
+        symbol_short,
+        testutils::{Address as _, Ledger},
+        Address, Env, Map, String, Symbol,
+    };
 
     fn default_cb_config() -> CircuitBreakerConfig {
         CircuitBreakerConfig {
@@ -294,5 +300,109 @@ mod test {
         // Try to propose parameter change with unauthorized address
         let result = client.try_propose_parameter_change(&unauthorized, &parameter_key, &new_value);
         assert_eq!(result, Err(Ok(ContractError::Unauthorized)));
+    }
+
+    #[test]
+    fn test_initialize_sets_governance_storage_defaults() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let contract_id = env.register_contract(None, AcademyRewardsContract);
+        let client = AcademyRewardsContractClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+
+        client.initialize(&admin, &default_cb_config());
+
+        env.as_contract(&contract_id, || {
+            let storage = env.storage().persistent();
+
+            assert!(storage.has(&symbol_short!("pcnt")));
+            let count: u64 = storage.get(&symbol_short!("pcnt")).unwrap();
+            assert_eq!(count, 0);
+
+            assert!(storage.has(&symbol_short!("pprop")));
+            let proposals: Map<u64, ParameterProposal> =
+                storage.get(&symbol_short!("pprop")).unwrap();
+            assert!(proposals.is_empty());
+
+            assert!(storage.has(&symbol_short!("gov_vals")));
+            let gov_vals: Map<Symbol, u128> = storage.get(&symbol_short!("gov_vals")).unwrap();
+            assert!(gov_vals.is_empty());
+        });
+    }
+
+    #[test]
+    fn test_first_proposal_id_is_one_after_initialize() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let contract_id = env.register_contract(None, AcademyRewardsContract);
+        let client = AcademyRewardsContractClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+
+        client.initialize(&admin, &default_cb_config());
+
+        let parameter_key = symbol_short!("max_rdm");
+        let proposal_id = client.propose_parameter_change(&admin, &parameter_key, &20u128);
+        assert_eq!(proposal_id, 1);
+
+        let proposal = client.get_parameter_proposal(&1);
+        assert_eq!(proposal.id, 1);
+        assert_eq!(proposal.parameter_key, parameter_key);
+        assert_eq!(proposal.old_value, 0);
+        assert_eq!(proposal.new_value, 20);
+    }
+
+    #[test]
+    fn test_get_proposal_before_any_proposal_returns_not_found() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let contract_id = env.register_contract(None, AcademyRewardsContract);
+        let client = AcademyRewardsContractClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+
+        client.initialize(&admin, &default_cb_config());
+
+        let result = client.try_get_parameter_proposal(&1);
+        assert_eq!(result, Err(Ok(ContractError::ProposalNotFound)));
+    }
+
+    #[test]
+    fn test_reinitialize_does_not_reset_governance_state() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let contract_id = env.register_contract(None, AcademyRewardsContract);
+        let client = AcademyRewardsContractClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+
+        client.initialize(&admin, &default_cb_config());
+
+        let parameter_key = symbol_short!("max_rdm");
+        let first_id = client.propose_parameter_change(&admin, &parameter_key, &20u128);
+        assert_eq!(first_id, 1);
+
+        // Re-initialization must be rejected and must not reset governance storage
+        let result = client.try_initialize(&admin, &default_cb_config());
+        assert_eq!(result, Err(Ok(ContractError::AlreadyInitialized)));
+
+        env.as_contract(&contract_id, || {
+            let count: u64 = env
+                .storage()
+                .persistent()
+                .get(&symbol_short!("pcnt"))
+                .unwrap();
+            assert_eq!(count, 1);
+        });
+
+        assert!(client.try_get_parameter_proposal(&1).is_ok());
+
+        let second_id = client.propose_parameter_change(&admin, &parameter_key, &30u128);
+        assert_eq!(second_id, 2);
     }
 }
