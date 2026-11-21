@@ -968,4 +968,73 @@ describe("MultisigTreasury", function () {
       );
     });
   });
+
+  describe("access control", () => {
+    it("rejects non-owners executing a fully approved transaction", async () => {
+      const value = ethers.parseEther("0.5");
+      const idx = await submitTx(owner0, recipient.address, value);
+      await confirmBy(idx, owner0);
+
+      const treasuryAddr = await treasury.getAddress();
+      const before = await ethers.provider.getBalance(treasuryAddr);
+      await expect(treasury.connect(recipient).executeTransaction(idx)).to.be.revertedWith(
+        "not owner"
+      );
+      expect(await ethers.provider.getBalance(treasuryAddr)).to.equal(before);
+      expect((await treasury.getTransaction(idx)).executed).to.equal(false);
+
+      // The same proposal still executes when an owner triggers it.
+      await treasury.connect(owner1).executeTransaction(idx);
+      expect((await treasury.getTransaction(idx)).executed).to.equal(true);
+    });
+
+    it("rejects non-owners executing a batch", async () => {
+      const value = ethers.parseEther("0.5");
+      const idxA = await submitTx(owner0, recipient.address, value);
+      const idxB = await submitTx(owner1, recipient.address, value);
+      await confirmBy(idxA, owner0);
+      await confirmBy(idxB, owner1);
+
+      await expect(
+        treasury.connect(recipient).executeBatch([idxA, idxB])
+      ).to.be.revertedWith("not owner");
+      expect((await treasury.getTransaction(idxA)).executed).to.equal(false);
+      expect((await treasury.getTransaction(idxB)).executed).to.equal(false);
+
+      await treasury.connect(owner2).executeBatch([idxA, idxB]);
+      expect((await treasury.getTransaction(idxA)).executed).to.equal(true);
+      expect((await treasury.getTransaction(idxB)).executed).to.equal(true);
+    });
+
+    it("rejects non-owners submitting, confirming and revoking", async () => {
+      const idx = await submitTx(owner0, recipient.address, 1n);
+      await confirmBy(idx, owner0);
+
+      await expect(
+        treasury.connect(recipient).submitTransaction(recipient.address, 1n, "0x")
+      ).to.be.revertedWith("not owner");
+      await expect(treasury.connect(recipient).confirmTransaction(idx)).to.be.revertedWith(
+        "not owner"
+      );
+      await expect(treasury.connect(recipient).revokeConfirmation(idx)).to.be.revertedWith(
+        "not owner"
+      );
+    });
+
+    it("rejects direct calls to self-only governance and emergency functions", async () => {
+      const calls = [
+        () => treasury.connect(owner0).updateLimits(1n, 1n, 1n),
+        () => treasury.connect(owner0).updateSensitiveRequired(3),
+        () => treasury.connect(owner0).updateTimelock(TWO_DAYS),
+        () => treasury.connect(owner0).pause(),
+        () => treasury.connect(owner0).unpause(),
+        () => treasury.connect(owner0).emergencyWithdraw(recipient.address, 1n),
+        () => treasury.connect(owner0).emergencyFreeze(),
+        () => treasury.connect(owner0).unfreezeInternal(),
+      ];
+      for (const call of calls) {
+        await expect(call()).to.be.revertedWith("only self");
+      }
+    });
+  });
 });
