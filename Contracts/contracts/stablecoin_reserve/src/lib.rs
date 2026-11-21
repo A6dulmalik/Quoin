@@ -35,6 +35,7 @@ pub enum ReserveError {
     ProposalNotActive = 3013,
     TimelockNotExpired = 3014,
     SupplyCapExceeded = 3015,
+    Paused = 3016,
 }
 
 #[contracttype]
@@ -52,6 +53,14 @@ pub struct ParameterProposal {
 }
 
 const TIMELOCK_DELAY: u64 = 86400; // 24 hours in seconds
+const PAUSED_KEY: Symbol = symbol_short!("paused");
+
+fn ensure_not_paused(env: &Env) -> Result<(), ReserveError> {
+    if env.storage().instance().get(&PAUSED_KEY).unwrap_or(false) {
+        return Err(ReserveError::Paused);
+    }
+    Ok(())
+}
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -125,6 +134,8 @@ impl StablecoinReserveContract {
             .instance()
             .set(&symbol_short!("stblcoin"), &stablecoin_address);
 
+        env.storage().instance().set(&PAUSED_KEY, &false);
+
         // Initialize reserve tracking
         reserve_tracking::initialize(env.clone());
 
@@ -138,6 +149,33 @@ impl StablecoinReserveContract {
         );
     }
 
+    /// Emergency pause for operational reserve actions. Requires the pause permission.
+    pub fn pause(env: Env, admin: Address) -> Result<(), ReserveError> {
+        admin.require_auth();
+        if !shared::acl::ACL::has_permission(&env, &admin, &shared::acl::PERMISSION_PAUSE) {
+            return Err(ReserveError::Unauthorized);
+        }
+        env.storage().instance().set(&PAUSED_KEY, &true);
+        env.events().publish((symbol_short!("reserve"), symbol_short!("paused")), admin);
+        Ok(())
+    }
+
+    /// Resume operational reserve actions. Requires the unpause permission.
+    pub fn unpause(env: Env, admin: Address) -> Result<(), ReserveError> {
+        admin.require_auth();
+        if !shared::acl::ACL::has_permission(&env, &admin, &shared::acl::PERMISSION_UNPAUSE) {
+            return Err(ReserveError::Unauthorized);
+        }
+        env.storage().instance().set(&PAUSED_KEY, &false);
+        env.events().publish((symbol_short!("reserve"), symbol_short!("resumed")), admin);
+        Ok(())
+    }
+
+    /// Read pause status; the default for existing deployments is unpaused.
+    pub fn is_paused(env: Env) -> bool {
+        env.storage().instance().get(&PAUSED_KEY).unwrap_or(false)
+    }
+
     /// Add a new reserve asset
     pub fn add_reserve_asset(
         env: Env,
@@ -146,6 +184,7 @@ impl StablecoinReserveContract {
         custodian: Address,
         verification_hash: BytesN<32>,
     ) -> Result<(), ReserveError> {
+        ensure_not_paused(&env)?;
         // Check governance authorization
         if !shared::governance::has_role(env.clone(), env.invoker(), GovernanceRole::Admin) {
             return Err(ReserveError::Unauthorized);
@@ -178,6 +217,7 @@ impl StablecoinReserveContract {
         new_amount: u128,
         verification_hash: BytesN<32>,
     ) -> Result<(), ReserveError> {
+        ensure_not_paused(&env)?;
         // Check governance authorization
         if !shared::governance::has_role(env.clone(), env.invoker(), GovernanceRole::Admin) {
             return Err(ReserveError::Unauthorized);
@@ -199,6 +239,7 @@ impl StablecoinReserveContract {
 
     /// Set the maximum stablecoin supply the reserve will back.
     pub fn set_supply_cap(env: Env, cap: u128) -> Result<(), ReserveError> {
+        ensure_not_paused(&env)?;
         if !shared::governance::has_role(env.clone(), env.invoker(), GovernanceRole::Admin) {
             return Err(ReserveError::Unauthorized);
         }
@@ -224,6 +265,7 @@ impl StablecoinReserveContract {
 
     /// Generate daily proof of reserves
     pub fn generate_proof_of_reserves(env: Env) -> Result<BytesN<32>, ReserveError> {
+        ensure_not_paused(&env)?;
         // Check governance authorization
         if !shared::governance::has_role(env.clone(), env.invoker(), GovernanceRole::Admin) {
             return Err(ReserveError::Unauthorized);
@@ -250,6 +292,7 @@ impl StablecoinReserveContract {
 
     /// Execute rebalancing if needed
     pub fn execute_rebalancing(env: Env) -> Result<(), ReserveError> {
+        ensure_not_paused(&env)?;
         // Check governance authorization
         if !shared::governance::has_role(env.clone(), env.invoker(), GovernanceRole::Executor) {
             return Err(ReserveError::Unauthorized);
@@ -260,6 +303,7 @@ impl StablecoinReserveContract {
 
     /// Generate regulatory report
     pub fn generate_regulatory_report(env: Env) -> Result<Symbol, ReserveError> {
+        ensure_not_paused(&env)?;
         // Check governance authorization
         if !shared::governance::has_role(env.clone(), env.invoker(), GovernanceRole::Admin) {
             return Err(ReserveError::Unauthorized);
@@ -270,6 +314,7 @@ impl StablecoinReserveContract {
 
     /// Sync with custodian API
     pub fn sync_with_custodian(env: Env, custodian: Address) -> Result<(), ReserveError> {
+        ensure_not_paused(&env)?;
         // Check governance authorization
         if !shared::governance::has_role(env.clone(), env.invoker(), GovernanceRole::Admin) {
             return Err(ReserveError::Unauthorized);
@@ -280,6 +325,7 @@ impl StablecoinReserveContract {
 
     /// Request redemption for large holders ($1M+)
     pub fn request_redemption(env: Env, amount: u128) -> Result<u64, ReserveError> {
+        ensure_not_paused(&env)?;
         // Check minimum amount ($1M equivalent in smallest units)
         if amount < 1_000_000_000_000 {
             // Assuming 12 decimals
@@ -291,6 +337,7 @@ impl StablecoinReserveContract {
 
     /// Process approved redemption
     pub fn process_redemption(env: Env, request_id: u64) -> Result<(), ReserveError> {
+        ensure_not_paused(&env)?;
         // Check governance authorization
         if !shared::governance::has_role(env.clone(), env.invoker(), GovernanceRole::Executor) {
             return Err(ReserveError::Unauthorized);
