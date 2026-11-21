@@ -2,7 +2,7 @@
 mod tests {
     use crate::{
         AssetType, RedemptionRequest, RedemptionStatus, ReserveAsset, ReserveError,
-        ReserveSnapshot, StablecoinReserveContract,
+        ReserveSnapshot, StablecoinReserveContract, StablecoinReserveContractClient,
     };
     use soroban_sdk::{symbol_short, Address, BytesN, Env};
 
@@ -547,5 +547,53 @@ mod tests {
         let snapshot = snapshot.unwrap();
         assert_eq!(snapshot.total_reserves, 9_000_000_000_000u128);
         assert_eq!(snapshot.assets.len(), 4);
+    }
+
+    #[test]
+    fn pause_blocks_operational_calls_and_unpause_restores_them() {
+        let env = create_test_env();
+        let contract_id = env.register_contract(None, StablecoinReserveContract);
+        let client = StablecoinReserveContractClient::new(&env, &contract_id);
+        let admin = Address::generate(&env);
+
+        env.as_contract(&contract_id, || {
+            use shared::acl::{
+                ACL, PERMISSION_PAUSE, PERMISSION_UNPAUSE, ROLE_ADMIN,
+            };
+            ACL::assign_role(&env, &admin, &ROLE_ADMIN);
+            ACL::assign_permission(&env, &ROLE_ADMIN, &PERMISSION_PAUSE);
+            ACL::assign_permission(&env, &ROLE_ADMIN, &PERMISSION_UNPAUSE);
+        });
+
+        assert!(!client.is_paused());
+        assert_eq!(client.pause(&admin), Ok(()));
+        assert!(client.is_paused());
+        assert_eq!(
+            client.request_redemption(&1_000_000_000_000u128),
+            Err(ReserveError::Paused)
+        );
+        assert_eq!(
+            client.set_supply_cap(&100u128),
+            Err(ReserveError::Paused)
+        );
+
+        assert_eq!(client.unpause(&admin), Ok(()));
+        assert!(!client.is_paused());
+        assert_eq!(
+            client.request_redemption(&1u128),
+            Err(ReserveError::RedemptionAmountTooSmall)
+        );
+    }
+
+    #[test]
+    fn only_permissioned_accounts_can_pause_or_unpause() {
+        let env = create_test_env();
+        let contract_id = env.register_contract(None, StablecoinReserveContract);
+        let client = StablecoinReserveContractClient::new(&env, &contract_id);
+        let outsider = Address::generate(&env);
+
+        assert_eq!(client.pause(&outsider), Err(ReserveError::Unauthorized));
+        assert_eq!(client.unpause(&outsider), Err(ReserveError::Unauthorized));
+        assert!(!client.is_paused());
     }
 }
