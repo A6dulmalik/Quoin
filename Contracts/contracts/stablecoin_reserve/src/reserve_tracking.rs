@@ -127,10 +127,40 @@ pub fn get_total_reserves(env: Env) -> Result<u128, ReserveError> {
     Ok(snapshot.total_reserves)
 }
 
+pub fn get_total_supply(env: Env) -> u128 {
+    env.storage().instance().get(&TOTAL_SUPPLY).unwrap_or(0u128)
+}
+
+fn require_collateralized(env: Env, new_supply: u128) -> Result<(), ReserveError> {
+    let total_reserves = env
+        .storage()
+        .instance()
+        .get::<Symbol, ReserveSnapshot>(&CURRENT_SNAPSHOT)
+        .map(|snapshot| snapshot.total_reserves)
+        .unwrap_or(0u128);
+
+    if new_supply > total_reserves {
+        return Err(ReserveError::ReserveRatioTooLow);
+    }
+
+    Ok(())
+}
+
+pub fn mint(env: Env, amount: u128) -> Result<(), ReserveError> {
+    let new_supply = get_total_supply(env.clone())
+        .checked_add(amount)
+        .ok_or(ReserveError::InvalidAsset)?;
+    update_total_supply(env, new_supply)
+}
+
 pub fn update_total_supply(env: Env, new_supply: u128) -> Result<(), ReserveError> {
     // Reject any supply increase beyond the configured cap.
     if new_supply > get_supply_cap(env.clone()) {
         return Err(ReserveError::SupplyCapExceeded);
+    }
+
+    if new_supply > get_total_supply(env.clone()) {
+        require_collateralized(env.clone(), new_supply)?;
     }
 
     env.storage().instance().set(&TOTAL_SUPPLY, &new_supply);
