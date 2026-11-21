@@ -212,6 +212,16 @@ impl StablecoinReserveContract {
         reserve_tracking::get_supply_cap(env)
     }
 
+    pub fn mint(env: Env, amount: u128) -> Result<(), ReserveError> {
+        reserve_tracking::mint(env.clone(), amount)?;
+
+        env.events().publish(
+            (symbol_short!("reserve"), symbol_short!("minted")),
+            (amount, env.ledger().timestamp()),
+        );
+        Ok(())
+    }
+
     /// Generate daily proof of reserves
     pub fn generate_proof_of_reserves(env: Env) -> Result<BytesN<32>, ReserveError> {
         // Check governance authorization
