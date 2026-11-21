@@ -971,6 +971,8 @@ describe("MultisigTreasury", function () {
 
   describe("access control", () => {
     it("rejects non-owners executing a fully approved transaction", async () => {
+  describe("access control", function () {
+    it("reverts when a non-owner attempts to execute a transaction", async () => {
       const value = ethers.parseEther("0.5");
       const idx = await submitTx(owner0, recipient.address, value);
       await confirmBy(idx, owner0);
